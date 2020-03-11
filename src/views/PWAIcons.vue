@@ -28,12 +28,15 @@
       <ol>
         <li v-for="item in imageList" :key="item.src">
           <div>{{item.src}}</div>
-          <a :href="item.url" :download="item.src">
+          <a :href="item.url" :download="`icons/${item.src}`">
             <img width="100" :src="item.url" />
           </a>
         </li>
       </ol>
     </v-content>
+    <v-dialog :value="loadingValue!=-1" hide-overlay persistent width="300">
+      <v-progress-circular :rotate="-90" :size="100" :width="15" :value="loadingValue" color="primary"></v-progress-circular>
+    </v-dialog>
   </v-card>
 </template>
 <script lang="ts">
@@ -58,13 +61,17 @@ import Vue from "vue";
 import Component from "vue-class-component";
 import { Prop, Watch } from "vue-property-decorator";
 import { VUEIcons } from "@/data";
-import { ObjectURL } from "@/utils";
+import { ObjectURL, download } from "@/utils";
+
+import JSZip from "jszip";
 
 @Component
 export default class PWAIconsClass extends Vue {
   iconScheme: number = 1;
   file: File | any = null;
   imageList: Array<any> = [];
+  //loadingDialog: boolean = false;
+  loadingValue: number = -1;
   get hasFile() {
     return !!this.file;
   }
@@ -72,19 +79,23 @@ export default class PWAIconsClass extends Vue {
   onFileChange(e: File) {
     //const input = e.target as HTMLInputElement;
     this.file = e;
+    this.imageList = [];
     //input.value = "";
   }
 
-  uploadIcon() {
+  async uploadIcon() {
     interface IResponseImage {
       size: string;
       response: Response;
     }
     const iconSizeMap = new Map();
     const fetchArray: any = [];
-    var img: any = this.file;
+    const img: any = this.file;
     const formData = new FormData();
     formData.append("img", img);
+
+    let loaded = 0;
+    this.loadingValue = 0;
     VUEIcons.forEach(item => {
       const itemSizeType = item.size + item.type;
       if (iconSizeMap.has(itemSizeType)) {
@@ -93,7 +104,7 @@ export default class PWAIconsClass extends Vue {
       }
       const param: any = {
         method: "POST",
-        data: formData
+        body: formData
       };
       iconSizeMap.set(itemSizeType, [item]);
       fetchArray.push(
@@ -103,28 +114,54 @@ export default class PWAIconsClass extends Vue {
             .pop()}&size=${item.size}`,
           param
         ).then((e: Response) => {
-          return { size: itemSizeType, response: e.blob() };
+          loaded++;
+          this.loadingValue = (loaded / fetchArray.length) * 100;
+          return e.blob().then(response => {
+            return { size: itemSizeType, response };
+          });
         })
       );
     });
-    Promise.all(fetchArray).then(e => {
-      const array: any = [];
-      (e as Array<{
-        size: string;
-        response: Response;
-      }>).forEach(({ size, response }) => {
-        const items = iconSizeMap.get(size);
-        const url = ObjectURL.create(response);
-        items.forEach((item: any) => {
-          item.url = url;
-          array.push(item);
-        });
+    const e = await Promise.all(fetchArray);
+    const array: any = [];
+    (e as Array<{
+      size: string;
+      response: Response;
+    }>).forEach(({ size, response }) => {
+      const items = iconSizeMap.get(size);
+      const url = ObjectURL.create(response);
+      items.forEach((item: any) => {
+        item.url = url;
+        array.push(item);
+        item.file = response;
       });
-      this.imageList = array;
     });
+    this.loadingValue = -1;
+    this.imageList = array;
+    return array;
   }
 
-  downloadIcons() {}
+  async downloadIcons() {
+    const zip = new JSZip();
+    const folders: { [index: string]: JSZip } = {};
+    let imageList = this.imageList;
+    if (imageList.length == 0) {
+      imageList = await this.uploadIcon();
+    }
+    imageList.forEach(item => {
+      if (item.path) {
+        if (!folders[item.path]) {
+          folders[item.path] = zip.folder(item.path);
+        }
+        folders[item.path].file(item.src, item.file);
+        return;
+      }
+      zip.file(item.src, item.file);
+    });
+    zip.generateAsync({ type: "blob" }).then(content => {
+      download(`${new Date().toJSON()}.zip`, ObjectURL.create(content));
+    });
+  }
 
   deactivated() {
     ObjectURL.revokeAll();
