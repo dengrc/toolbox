@@ -11,6 +11,9 @@
     <p>
       <router-link to="/vue_props">Vue props 生成</router-link>
     </p>
+    <p>
+      <router-link to="/echarts_svg">ECharts SVG 生成</router-link>
+    </p>
   </div>
 </template>
 

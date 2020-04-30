@@ -66,7 +66,7 @@ import { ObjectURL, download } from "@/utils";
 import JSZip from "jszip";
 
 @Component
-export default class PWAIconsClass extends Vue {
+export default class PWAIconsView extends Vue {
   iconScheme: number = 1;
   file: File | any = null;
   imageList: Array<any> = [];
