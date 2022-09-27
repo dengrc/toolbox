@@ -14,6 +14,9 @@
     <p>
       <router-link to="/echarts_svg">ECharts SVG 生成</router-link>
     </p>
+     <p>
+      <router-link to="/internet">互联网</router-link>
+    </p>
   </div>
 </template>
 
